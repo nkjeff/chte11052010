@@ -36,7 +36,7 @@ jobs:
           git -C /tmp/telegram-upstream checkout --detach "$SOURCE_SHA"
           git -C /tmp/telegram-upstream submodule update --init --recursive --depth 1
 
-          rsync -a --delete --exclude='.git' --exclude="$WORKFLOW" /tmp/telegram-upstream/ ./
+          rsync -a --delete --exclude='.git' --exclude='/.github/' /tmp/telegram-upstream/ ./
           mkdir -p .github/workflows
           cp /tmp/bootstrap-workflow.yml "$WORKFLOW"
 
