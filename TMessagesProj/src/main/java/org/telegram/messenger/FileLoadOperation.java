@@ -845,7 +845,9 @@ public class FileLoadOperation {
                 totalBytesCount > 0 && key == null && !encryptFile && !isPreloadVideoOperation && preloadPrefixSize == 0;
         if (useDownloadByteBudget) {
             boolean premium = UserConfig.getInstance(currentAccount).isPremium();
-            downloadConnectionsCount = premium ? ConnectionsManager.DownloadConnectionsCount : 4;
+            // Keep the existing byte budget; use four lanes only when the network is not slow.
+            // The slot index is masked below, so the pool size must stay a power of two.
+            downloadConnectionsCount = premium ? ConnectionsManager.DownloadConnectionsCount : (ApplicationLoader.isConnectionSlow() ? 2 : 4);
             int byteBudget = (premium ? 16 : 2) * 1024 * 1024;
             currentMaxDownloadRequests = byteBudget / currentDownloadChunkSize;
         }
