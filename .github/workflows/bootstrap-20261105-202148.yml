@@ -1,0 +1,200 @@
+name: Telegram clean-source bootstrap and ARM64 build 2026-11-05 20:21:48
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: telegram-arm64-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Import pinned official Telegram source and apply requested changes
+        if: ${{ hashFiles('.bootstrap_pending') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_SHA=3de37c8cfb039452be7398909461da6288babf15
+          WORKFLOW=.github/workflows/bootstrap-20261105-202148.yml
+          cp "$WORKFLOW" /tmp/bootstrap-workflow.yml
+
+          git clone --filter=blob:none --no-checkout https://github.com/DrKLO/Telegram.git /tmp/telegram-upstream
+          git -C /tmp/telegram-upstream fetch --depth=1 origin "$SOURCE_SHA"
+          git -C /tmp/telegram-upstream checkout --detach "$SOURCE_SHA"
+          git -C /tmp/telegram-upstream submodule update --init --recursive --depth 1
+
+          rsync -a --delete --exclude='.git' --exclude="$WORKFLOW" /tmp/telegram-upstream/ ./
+          mkdir -p .github/workflows
+          cp /tmp/bootstrap-workflow.yml "$WORKFLOW"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              s = p.read_text()
+              count = s.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one matching block, found {count}")
+              p.write_text(s.replace(old, new, 1))
+
+          main = "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java"
+          p = Path(main)
+          s = p.read_text()
+
+          start = "        tabsView = new MainTabsLayout(context, resourceProvider);"
+          end = "        updateLayoutWrapper = new UpdateLayoutWrapper(context);"
+          if s.count(start) != 1 or s.count(end) != 1:
+              raise SystemExit("MainTabsActivity.createView markers did not match the pinned source")
+          a = s.index(start)
+          b = s.index(end, a)
+          s = s[:a] + s[b:]
+
+          old_insets = """        ViewGroup.MarginLayoutParams lp;
+                  {
+                      final int height = navigationBarHeight + updateLayoutHeight + dp(DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS);
+                      lp = (ViewGroup.MarginLayoutParams) fadeView.getLayoutParams();
+                      if (lp.height != height) {
+                          lp.height = height;
+                          fadeView.setLayoutParams(lp);
+                      }
+                  }
+                  {
+                      int bottomMargin = isUpdateLayoutVisible ? (navigationBarHeight + updateLayoutHeight) : 0;
+                      if (tabletLayout) {
+                          bottomMargin = Math.max(bottomMargin, navigationBarHeight + dp(DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS));
+                      }
+                      lp = (ViewGroup.MarginLayoutParams) viewPager.getLayoutParams();
+                      if (lp.bottomMargin != bottomMargin || lp.leftMargin != systemInsets.left || lp.rightMargin != systemInsets.right) {
+                          lp.leftMargin = systemInsets.left;
+                          lp.rightMargin = systemInsets.right;
+                          lp.bottomMargin = bottomMargin;
+                          viewPager.setLayoutParams(lp);
+                      }
+                  }
+
+                  tabsViewWrapper.setPadding(systemInsets.left, 0, systemInsets.right, navigationBarHeight);"""
+          new_insets = """        ViewGroup.MarginLayoutParams lp;
+                  {
+                      int bottomMargin = isUpdateLayoutVisible ? (navigationBarHeight + updateLayoutHeight) : 0;
+                      lp = (ViewGroup.MarginLayoutParams) viewPager.getLayoutParams();
+                      if (lp.bottomMargin != bottomMargin || lp.leftMargin != systemInsets.left || lp.rightMargin != systemInsets.right) {
+                          lp.leftMargin = systemInsets.left;
+                          lp.rightMargin = systemInsets.right;
+                          lp.bottomMargin = bottomMargin;
+                          viewPager.setLayoutParams(lp);
+                      }
+                  }"""
+          if old_insets not in s:
+              raise SystemExit("MainTabsActivity window-insets block did not match the pinned source")
+          s = s.replace(old_insets, new_insets, 1)
+
+          s = s.replace(
+              "return navigationBarHeight + dp(DialogsActivity.MAIN_TABS_HEIGHT + DialogsActivity.MAIN_TABS_MARGIN);",
+              "return navigationBarHeight;", 1)
+          s = s.replace('bundle.putBoolean("hasMainTabs", true);', 'bundle.putBoolean("hasMainTabs", false);')
+          s = s.replace('args.putBoolean("hasMainTabs", true);', 'args.putBoolean("hasMainTabs", false);')
+
+          s = s.replace(
+              "    public void selectTab(int position, boolean animated) {\n        for (int a = 0; a < tabs.length; a++) {",
+              "    public void selectTab(int position, boolean animated) {\n        if (tabs == null) return;\n        for (int a = 0; a < tabs.length; a++) {", 1)
+          s = s.replace(
+              "    public void setGestureSelectedOverride(float animatedPosition, boolean allow) {\n        for (int index = 0; index < tabs.length; index++) {",
+              "    public void setGestureSelectedOverride(float animatedPosition, boolean allow) {\n        if (tabs == null || tabsView == null) return;\n        for (int index = 0; index < tabs.length; index++) {", 1)
+          s = s.replace(
+              "    private void checkUi_tabsPosition() {\n        final boolean isUpdateLayoutVisible = updateLayoutWrapper.isUpdateLayoutVisible();",
+              "    private void checkUi_tabsPosition() {\n        if (tabsViewWrapper == null || tabsView == null) return;\n        final boolean isUpdateLayoutVisible = updateLayoutWrapper.isUpdateLayoutVisible();", 1)
+          p.write_text(s)
+
+          dialogs = "TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java"
+          old_title = """        actionBar.setTitleActionRunnable(() -> {
+                      if (initialDialogsType != DIALOGS_TYPE_WIDGET) {
+                          hideFloatingButton(false);
+                      }
+                      if (hasOnlySlefStories && getStoriesController().hasOnlySelfStories()) {
+                          dialogStoriesCell.openSelfStories();
+                      } else {
+                          scrollToTop(true, true);
+                      }
+                  });"""
+          new_title = """        actionBar.setTitleActionRunnable(() -> {
+                      if (initialDialogsType == DIALOGS_TYPE_DEFAULT && !onlySelect && folderId == 0 && communityId == 0 && TextUtils.isEmpty(searchString)) {
+                          presentFragment(new SettingsActivity());
+                          return;
+                      }
+                      if (initialDialogsType != DIALOGS_TYPE_WIDGET) {
+                          hideFloatingButton(false);
+                      }
+                      if (hasOnlySlefStories && getStoriesController().hasOnlySelfStories()) {
+                          dialogStoriesCell.openSelfStories();
+                      } else {
+                          scrollToTop(true, true);
+                      }
+                  });"""
+          replace_once(dialogs, old_title, new_title)
+
+          app_gradle = "TMessagesProj_App/build.gradle"
+          p = Path(app_gradle)
+          s = p.read_text()
+          old_abi = 'abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"'
+          if s.count(old_abi) != 2:
+              raise SystemExit(f"Expected two ABI lists in {app_gradle}, found {s.count(old_abi)}")
+          p.write_text(s.replace(old_abi, 'abiFilters "arm64-v8a"'))
+
+          Path(".bootstrap_pending").unlink(missing_ok=True)
+          Path("SOURCE_BASELINE.txt").write_text(
+              "Official source: https://github.com/DrKLO/Telegram\n"
+              f"Pinned commit: {SOURCE_SHA}\n"
+              "The previous custom repository was not used as a source or merged.\n"
+              "Custom changes: remove main bottom navigation UI, remove its bottom inset reservation, "
+              "open Settings from the root Telegram title, and restrict standard app ABI to arm64-v8a.\n"
+          )
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Import clean Telegram source and apply minimal ARM64 changes"
+          git push origin HEAD:main
+
+      - name: Set up Java
+        if: ${{ hashFiles('settings.gradle') != '' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK and NDK
+        if: ${{ hashFiles('settings.gradle') != '' }}
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build components
+        if: ${{ hashFiles('settings.gradle') != '' }}
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Build standard ARM64-v8a debug APK
+        if: ${{ hashFiles('settings.gradle') != '' }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :TMessagesProj_App:assembleAfatDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        if: ${{ success() && hashFiles('settings.gradle') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: telegram-arm64v8a-debug-20261105-202148
+          path: TMessagesProj_App/build/outputs/apk/afat/debug/*.apk
+          if-no-files-found: error
