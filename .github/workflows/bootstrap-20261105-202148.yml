@@ -160,7 +160,7 @@ jobs:
           Path(".bootstrap_pending").unlink(missing_ok=True)
           Path("SOURCE_BASELINE.txt").write_text(
               "Official source: https://github.com/DrKLO/Telegram\n"
-              f"Pinned commit: {SOURCE_SHA}\n"
+              "Pinned commit: 3de37c8cfb039452be7398909461da6288babf15\n"
               "The previous custom repository was not used as a source or merged.\n"
               "Custom changes: remove main bottom navigation UI, remove its bottom inset reservation, "
               "open Settings from the root Telegram title, and restrict standard app ABI to arm64-v8a.\n"
