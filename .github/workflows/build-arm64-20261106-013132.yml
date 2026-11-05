@@ -1,0 +1,62 @@
+name: Android ARM64 build 2026-11-06 01:31:32 +0800
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-arm64-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout with native submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required Android toolchains
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
+      - name: Build ARM64-v8a debug APK only
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace :TMessagesProj_App:assembleAfatDebug
+
+      - name: Verify APK contains only ARM64-v8a native libraries
+        shell: bash
+        run: |
+          APK="$(find TMessagesProj_App/build/outputs/apk -type f -name '*.apk' | head -n 1)"
+          test -n "$APK"
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          mapfile -t ABIS < <(unzip -Z1 "$APK" | awk -F/ '$1 == "lib" {print $2}' | sort -u)
+          printf 'Native ABIs: %s\n' "${ABIS[*]}"
+          test "${#ABIS[@]}" -eq 1
+          test "${ABIS[0]}" = "arm64-v8a"
+
+      - name: Upload verified APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: chte11052010-arm64-v8a-debug-20261106-013132
+          path: ${{ env.APK }}
+          if-no-files-found: error
+          retention-days: 14
