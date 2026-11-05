@@ -98,6 +98,8 @@ jobs:
                           viewPager.setLayoutParams(lp);
                       }
                   }"""
+          old_insets = old_insets.replace("\n                  {", "\n        {").replace("\n                      ", "\n            ").replace("\n                  }", "\n        }").replace("\n\n                  tabsViewWrapper", "\n\n        tabsViewWrapper")
+          new_insets = new_insets.replace("\n                  {", "\n        {").replace("\n                      ", "\n            ").replace("\n                  }", "\n        }")
           if old_insets not in s:
               raise SystemExit("MainTabsActivity window-insets block did not match the pinned source")
           s = s.replace(old_insets, new_insets, 1)
@@ -107,7 +109,6 @@ jobs:
               "return navigationBarHeight;", 1)
           s = s.replace('bundle.putBoolean("hasMainTabs", true);', 'bundle.putBoolean("hasMainTabs", false);')
           s = s.replace('args.putBoolean("hasMainTabs", true);', 'args.putBoolean("hasMainTabs", false);')
-
           s = s.replace(
               "    public void selectTab(int position, boolean animated) {\n        for (int a = 0; a < tabs.length; a++) {",
               "    public void selectTab(int position, boolean animated) {\n        if (tabs == null) return;\n        for (int a = 0; a < tabs.length; a++) {", 1)
@@ -144,6 +145,8 @@ jobs:
                           scrollToTop(true, true);
                       }
                   });"""
+          old_title = old_title.replace("\n                      ", "\n            ").replace("\n                  });", "\n        });")
+          new_title = new_title.replace("\n                      ", "\n            ").replace("\n                  });", "\n        });")
           replace_once(dialogs, old_title, new_title)
 
           app_gradle = "TMessagesProj_App/build.gradle"
