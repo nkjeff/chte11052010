@@ -1,0 +1,4 @@
+Official source: https://github.com/DrKLO/Telegram
+Pinned commit: 3de37c8cfb039452be7398909461da6288babf15
+The previous custom repository was not used as a source or merged.
+Custom changes: remove main bottom navigation UI, remove its bottom inset reservation, open Settings from the root Telegram title, and restrict standard app ABI to arm64-v8a.
