@@ -18220,9 +18220,9 @@ public class MessagesStorage extends BaseController {
 
             LongSparseArray<DialogsSearchAdapter.DialogSearchResult> dialogsResult = new LongSparseArray<>();
             if (folderId >= 0) {
-                cursor = getDatabase().queryFinalized("SELECT did, date FROM dialogs WHERE folder_id = ? ORDER BY date DESC LIMIT 600", folderId);
+                cursor = getDatabase().queryFinalized("SELECT did, date FROM dialogs WHERE folder_id = ? ORDER BY date DESC LIMIT 2000", folderId);
             } else {
-                cursor = getDatabase().queryFinalized("SELECT did, date FROM dialogs ORDER BY date DESC LIMIT 600");
+                cursor = getDatabase().queryFinalized("SELECT did, date FROM dialogs ORDER BY date DESC LIMIT 2000");
             }
             while (cursor.next()) {
                 long id = cursor.longValue(0);
@@ -18292,20 +18292,18 @@ public class MessagesStorage extends BaseController {
                 cursor = getDatabase().queryFinalized(String.format(Locale.US, "SELECT data, status, name FROM users WHERE uid IN(%s)", TextUtils.join(",", usersToLoad)));
                 while (cursor.next()) {
                     String name = cursor.stringValue(2);
-                    String tName = LocaleController.getInstance().getTranslitString(name);
-                    if (name.equals(tName)) {
+                    int usernamePos = name.lastIndexOf(";;;");
+                    String displayName = usernamePos == -1 ? name : name.substring(0, usernamePos);
+                    String tName = LocaleController.getInstance().getTranslitString(displayName);
+                    if (displayName.equals(tName)) {
                         tName = null;
                     }
-                    String username = null;
-                    int usernamePos = name.lastIndexOf(";;;");
-                    if (usernamePos != -1) {
-                        username = name.substring(usernamePos + 3);
-                    }
+                    String username = usernamePos == -1 ? null : name.substring(usernamePos + 3);
                     int found = 0;
                     for (String q : search) {
-                        if (name.startsWith(q) || name.contains(" " + q) || tName != null && (tName.startsWith(q) || tName.contains(" " + q))) {
+                        if (displayName.contains(q) || tName != null && tName.contains(q)) {
                             found = 1;
-                        } else if (username != null && username.startsWith(q)) {
+                        } else if (username != null && username.contains(q)) {
                             found = 2;
                         }
                         if (found != 0) {
@@ -18340,12 +18338,13 @@ public class MessagesStorage extends BaseController {
                 cursor = getDatabase().queryFinalized(String.format(Locale.US, "SELECT data, name FROM chats WHERE uid IN(%s)", TextUtils.join(",", chatsToLoad)));
                 while (cursor.next()) {
                     String name = cursor.stringValue(1);
-                    String tName = LocaleController.getInstance().getTranslitString(name);
-                    if (name.equals(tName)) {
+                    String normalizedName = name.toLowerCase();
+                    String tName = LocaleController.getInstance().getTranslitString(normalizedName);
+                    if (normalizedName.equals(tName)) {
                         tName = null;
                     }
                     for (String q : search) {
-                        if (name.startsWith(q) || name.contains(" " + q) || tName != null && (tName.startsWith(q) || tName.contains(" " + q))) {
+                        if (normalizedName.contains(q) || tName != null && tName.contains(q)) {
                             NativeByteBuffer data = cursor.byteBufferValue(0);
                             if (data != null) {
                                 TLRPC.Chat chat = TLRPC.Chat.TLdeserialize(data, data.readInt32(false), false);
@@ -18371,7 +18370,7 @@ public class MessagesStorage extends BaseController {
                                         tName = null;
                                     }
 
-                                    boolean ok = name.startsWith(q) || name.contains(" " + q) || tName != null && (tName.startsWith(q) || tName.contains(" " + q));
+                                    boolean ok = name.contains(q) || tName != null && tName.contains(q);
                                     if (!ok) {
                                         continue;
                                     }
