@@ -91,19 +91,26 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
     public final static int VIEW_TYPE_EMPTY_RESULT = 10;
 
     public static enum Filter {
-        All(0, R.string.SearchMessagesFilterAll, R.string.SearchMessagesFilterAllFrom),
-        Private(8, R.string.SearchMessagesFilterPrivate, R.string.SearchMessagesFilterPrivateFrom),
-        Groups(4, R.string.SearchMessagesFilterGroup, R.string.SearchMessagesFilterGroupFrom),
-        Channels(2, R.string.SearchMessagesFilterChannels, R.string.SearchMessagesFilterChannelsFrom);
+        All(0, R.string.SearchMessagesFilterAll, R.string.SearchMessagesFilterAllFrom, new TLRPC.TL_inputMessagesFilterEmpty()),
+        Private(8, R.string.SearchMessagesFilterPrivate, R.string.SearchMessagesFilterPrivateFrom, new TLRPC.TL_inputMessagesFilterEmpty()),
+        Groups(4, R.string.SearchMessagesFilterGroup, R.string.SearchMessagesFilterGroupFrom, new TLRPC.TL_inputMessagesFilterEmpty()),
+        Channels(2, R.string.SearchMessagesFilterChannels, R.string.SearchMessagesFilterChannelsFrom, new TLRPC.TL_inputMessagesFilterEmpty()),
+        Media(16, R.string.SharedMediaTab2, R.string.SharedMediaTab2, new TLRPC.TL_inputMessagesFilterPhotoVideo()),
+        Links(32, R.string.SharedLinksTab2, R.string.SharedLinksTab2, new TLRPC.TL_inputMessagesFilterUrl()),
+        Files(64, R.string.SharedFilesTab2, R.string.SharedFilesTab2, new TLRPC.TL_inputMessagesFilterDocument()),
+        Music(128, R.string.SharedMusicTab2, R.string.SharedMusicTab2, new TLRPC.TL_inputMessagesFilterMusic()),
+        Voice(256, R.string.SharedVoiceTab2, R.string.SharedVoiceTab2, new TLRPC.TL_inputMessagesFilterRoundVoice());
 
         public final int flags;
         public final int strResId;
         public final int strFromResId;
+        public final TLRPC.MessagesFilter inputFilter;
 
-        Filter(int flags, int strResId, int strFromResId) {
+        Filter(int flags, int strResId, int strFromResId, TLRPC.MessagesFilter inputFilter) {
             this.flags = flags;
             this.strResId = strResId;
             this.strFromResId = strFromResId;
+            this.inputFilter = inputFilter;
         }
     }
 
@@ -422,7 +429,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
         final TLRPC.TL_messages_search req = new TLRPC.TL_messages_search();
         req.limit = 20;
         req.q = query;
-        req.filter = new TLRPC.TL_inputMessagesFilterEmpty();
+        req.filter = currentMessagesFilter.inputFilter;
         req.peer = MessagesController.getInstance(currentAccount).getInputPeer(dialogId);
         if (query.equals(lastMessagesSearchString) && !searchForumResultMessages.isEmpty()) {
             req.add_offset = searchForumResultMessages.size();
@@ -553,7 +560,7 @@ public class DialogsSearchAdapter extends RecyclerListView.SelectionAdapter {
         req.users_only = (currentMessagesFilter.flags & 8) != 0;
         req.limit = 20;
         req.q = query;
-        req.filter = new TLRPC.TL_inputMessagesFilterEmpty();
+        req.filter = currentMessagesFilter.inputFilter;
         req.flags |= 1;
         req.folder_id = folderId;
         if (!query.equals(lastMessagesSearchString)) {
